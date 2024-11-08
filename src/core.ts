@@ -1,6 +1,9 @@
-import { decodeBase64, keccak256 } from 'ethers'
+import { decodeBase64, encodeBase64, getBytes, hexlify, keccak256, toUtf8Bytes } from 'ethers'
 import { RP_URL } from './config'
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
+import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/typescript-types'
+import { AbiCoder } from 'ethers'
+import { p256 } from '@noble/curves/p256'
 
 const credentials = 'include'
 
@@ -88,7 +91,7 @@ export async function register(username: string) {
 /**
  * Modified from zerodev sdk toWebAuthnKey()
  */
-export async function login(username: string) {
+export async function login() {
 	// Get login options
 	const loginOptionsResponse = await fetch(`${RP_URL}/login/options`, {
 		method: 'POST',
@@ -174,80 +177,71 @@ function decodeBase64URL(base64UrlString: string) {
 	return decodeBase64(base64)
 }
 
-// export async function signMessage(
-// 	message: SignableMessage,
-// 	chainId: number,
-// 	allowCredentials?: PublicKeyCredentialRequestOptionsJSON['allowCredentials'],
-// ) {
-//     let messageContent: string
-//     if (typeof message === "string") {
-//         // message is a string
-//         messageContent = message
-//     } else if ("raw" in message && typeof message.raw === "string") {
-//         // message.raw is a Hex string
-//         messageContent = message.raw
-//     } else if ("raw" in message && message.raw instanceof Uint8Array) {
-//         // message.raw is a ByteArray
-//         messageContent = message.raw.toString()
-//     } else {
-//         throw new Error("Unsupported message format")
-//     }
+// Modified from zerodev-sdk signMessageUsingWebAuthn
+export async function signMessage(
+	message: string,
+	allowCredentials?: PublicKeyCredentialRequestOptionsJSON['allowCredentials'],
+) {
+	const messageContent = keccak256(getBytes(toUtf8Bytes(message)))
+	const challenge = encodeBase64(getBytes(messageContent))
 
-//     // remove 0x prefix if present
-//     const formattedMessage = messageContent.startsWith("0x")
-//         ? messageContent.slice(2)
-//         : messageContent
+	// prepare assertion options
+	const assertionOptions: PublicKeyCredentialRequestOptionsJSON = {
+		challenge,
+		allowCredentials,
+		userVerification: 'required',
+	}
 
-//     const challenge = base64FromUint8Array(
-//         hexStringToUint8Array(formattedMessage),
-//         true
-//     )
+	// start authentication (signing)
+	const cred = await startAuthentication(assertionOptions)
 
-//     // prepare assertion options
-//     const assertionOptions: PublicKeyCredentialRequestOptionsJSON = {
-//         challenge,
-//         allowCredentials,
-//         userVerification: "required"
-//     }
+	// get authenticator data
+	const { authenticatorData } = cred.response
+	const authenticatorDataHex = hexlify(decodeBase64URL(authenticatorData))
 
-//     // start authentication (signing)
-//     const cred = await startAuthentication(assertionOptions)
+	// get client data JSON
+	const clientDataJSON = atob(cred.response.clientDataJSON)
 
-//     // get authenticator data
-//     const { authenticatorData } = cred.response
-//     const authenticatorDataHex = uint8ArrayToHexString(
-//         b64ToBytes(authenticatorData)
-//     )
+	const findQuoteIndices = (input: string): { beforeType: bigint; beforeChallenge: bigint } => {
+		const beforeTypeIndex = BigInt(input.lastIndexOf('"type":"webauthn.get"'))
+		const beforeChallengeIndex = BigInt(input.indexOf('"challenge'))
+		return {
+			beforeType: beforeTypeIndex,
+			beforeChallenge: beforeChallengeIndex,
+		}
+	}
+	// get challenge and response type location
+	const { beforeType } = findQuoteIndices(clientDataJSON)
 
-//     // get client data JSON
-//     const clientDataJSON = atob(cred.response.clientDataJSON)
+	// get signature r,s
+	const { signature } = cred.response
+	const signatureHex = hexlify(decodeBase64URL(signature))
 
-//     // get challenge and response type location
-//     const { beforeType } = findQuoteIndices(clientDataJSON)
+	const { r, s } = parseAndNormalizeSig(signatureHex)
+	// Parse DER-encoded P256-SHA256 signature to contract-friendly signature
+	// and normalize it so the signature is not malleable.
+	function parseAndNormalizeSig(derSig: string): { r: bigint; s: bigint } {
+		const parsedSignature = p256.Signature.fromDER(derSig.slice(2))
+		const bSig = getBytes(`0x${parsedSignature.toCompactHex()}`)
+		// assert(bSig.length === 64, "signature is not 64 bytes");
+		const bR = bSig.slice(0, 32)
+		const bS = bSig.slice(32)
 
-//     // get signature r,s
-//     const { signature } = cred.response
-//     const signatureHex = uint8ArrayToHexString(b64ToBytes(signature))
-//     const { r, s } = parseAndNormalizeSig(signatureHex)
+		// Avoid malleability. Ensure low S (<= N/2 where N is the curve order)
+		const r = BigInt(hexlify(bR))
+		let s = BigInt(hexlify(bS))
+		const n = BigInt('0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551')
+		if (s > n / 2n) {
+			s = n - s
+		}
+		return { r, s }
+	}
 
-//     // encode signature
-//     const encodedSignature = encodeAbiParameters(
-//         [
-//             { name: "authenticatorData", type: "bytes" },
-//             { name: "clientDataJSON", type: "string" },
-//             { name: "responseTypeLocation", type: "uint256" },
-//             { name: "r", type: "uint256" },
-//             { name: "s", type: "uint256" },
-//             { name: "usePrecompiled", type: "bool" }
-//         ],
-//         [
-//             authenticatorDataHex,
-//             clientDataJSON,
-//             beforeType,
-//             BigInt(r),
-//             BigInt(s),
-//             isRIP7212SupportedNetwork(chainId)
-//         ]
-//     )
-//     return encodedSignature
-// }
+	const abiCoder = new AbiCoder()
+	const encodedSignature = abiCoder.encode(
+		['bytes', 'string', 'uint256', 'uint256', 'uint256', 'bool'],
+		[authenticatorDataHex, clientDataJSON, beforeType, BigInt(r), BigInt(s), false],
+	)
+
+	return encodedSignature
+}

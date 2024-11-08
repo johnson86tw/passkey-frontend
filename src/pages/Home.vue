@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { login, register } from '@/core'
+import { login, register, signMessage } from '@/core'
 
 const username = ref('alice')
 
@@ -18,24 +18,30 @@ async function onClickRegister() {
 
 async function onClickLogin() {
 	try {
-		const { pubX, pubY, authenticatorId, authenticatorIdHash } = await login(username.value)
+		const { pubX, pubY, authenticatorId, authenticatorIdHash } = await login()
 		console.log('login', pubX, pubY, authenticatorId, authenticatorIdHash)
 	} catch (e) {
 		console.error(e)
 		alert(e)
 	}
 }
+
+const message = ref('hello world')
+async function onClickSign() {
+	const signature = await signMessage(message.value)
+	console.log(signature)
+}
 </script>
 
 <template>
 	<div class="p-5 flex flex-col gap-5">
+		<div class="flex gap-2 items-center">
+			<label for="username">Username</label>
+			<input v-model="username" type="text" class="input" />
+		</div>
+
 		<div class="flex flex-col gap-2">
 			<div class="title">Registration</div>
-
-			<div class="flex gap-2 items-center">
-				<label for="username">Username</label>
-				<input v-model="username" type="text" class="input" @keypress.enter="onClickRegister" />
-			</div>
 			<div>
 				<button class="btn" @click="onClickRegister">Register</button>
 			</div>
@@ -43,13 +49,19 @@ async function onClickLogin() {
 
 		<div class="flex flex-col gap-2">
 			<div class="title">Login</div>
-
-			<div class="flex gap-2 items-center">
-				<label for="username">Username</label>
-				<input v-model="username" type="text" class="input" @keypress.enter="onClickLogin" />
-			</div>
 			<div>
 				<button class="btn" @click="onClickLogin">Login</button>
+			</div>
+		</div>
+
+		<div class="flex flex-col gap-2">
+			<div class="title">Sign</div>
+			<div class="flex gap-2 items-center">
+				<label for="username">Message</label>
+				<input v-model="message" type="text" class="input" />
+			</div>
+			<div>
+				<button class="btn" @click="onClickSign">Sign</button>
 			</div>
 		</div>
 	</div>
