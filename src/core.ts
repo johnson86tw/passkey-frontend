@@ -1,4 +1,4 @@
-import { decodeBase64, encodeBase64, getBytes, hexlify, keccak256, toUtf8Bytes } from 'ethers'
+import { decodeBase64, encodeBase64, getBytes, hexlify, isHexString, keccak256, toUtf8Bytes } from 'ethers'
 import { RP_URL } from './config'
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/typescript-types'
@@ -182,8 +182,13 @@ export async function signMessage(
 	message: string,
 	allowCredentials?: PublicKeyCredentialRequestOptionsJSON['allowCredentials'],
 ) {
-	const messageContent = keccak256(getBytes(toUtf8Bytes(message)))
-	const challenge = encodeBase64(getBytes(messageContent))
+	let hash = message
+	if (!isHexString(message)) {
+		hash = keccak256(getBytes(toUtf8Bytes(message)))
+	}
+	console.log(hash)
+
+	const challenge = encodeBase64(getBytes(hash))
 
 	// prepare assertion options
 	const assertionOptions: PublicKeyCredentialRequestOptionsJSON = {

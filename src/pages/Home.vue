@@ -6,8 +6,8 @@ const username = ref('alice')
 
 async function onClickRegister() {
 	try {
-		const { pubX, pubY, authenticatorId, authenticatorIdHash } = await register(username.value)
-		console.log('register', pubX, pubY, authenticatorId, authenticatorIdHash)
+		const res = await register(username.value)
+		console.log('register', res)
 
 		// @todo install webauthn validator module
 	} catch (e) {
@@ -18,8 +18,8 @@ async function onClickRegister() {
 
 async function onClickLogin() {
 	try {
-		const { pubX, pubY, authenticatorId, authenticatorIdHash } = await login()
-		console.log('login', pubX, pubY, authenticatorId, authenticatorIdHash)
+		const res = await login()
+		console.log('login', res)
 	} catch (e) {
 		console.error(e)
 		alert(e)
@@ -28,8 +28,13 @@ async function onClickLogin() {
 
 const message = ref('hello world')
 async function onClickSign() {
-	const signature = await signMessage(message.value)
-	console.log(signature)
+	try {
+		const signature = await signMessage(message.value)
+		console.log(signature)
+	} catch (e) {
+		console.error(e)
+		alert(e)
+	}
 }
 </script>
 
