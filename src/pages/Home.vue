@@ -61,9 +61,9 @@ async function onClickSign() {
 
 		<div class="flex flex-col gap-2">
 			<div class="title">Sign</div>
-			<div class="flex gap-2 items-center">
+			<div class="flex flex-col gap-2">
 				<label for="username">Message</label>
-				<input v-model="message" type="text" class="input" />
+				<input v-model="message" type="text" class="input input-wide" />
 			</div>
 			<div>
 				<button class="btn" @click="onClickSign">Sign</button>
@@ -83,5 +83,9 @@ async function onClickSign() {
 
 .input {
 	@apply w-[150px] h-[27px] shadow appearance-none border rounded py-3 px-3 text-gray-700 leading-tight focus:outline-none;
+}
+
+.input-wide {
+	@apply w-[650px];
 }
 </style>
