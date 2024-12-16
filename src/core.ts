@@ -121,6 +121,10 @@ export async function login() {
 
 	const loginVerifyResult = await loginVerifyResponse.json()
 
+	if (loginVerifyResult.error) {
+		throw new Error(loginVerifyResult.error)
+	}
+
 	if (!loginVerifyResult.verification.verified) {
 		throw new Error('Login not verified')
 	}
