@@ -1,1 +1,2 @@
-export const RP_URL = 'http://127.0.0.1:8080/api/v4'
+export const BASE_URL = 'http://127.0.0.1:3000'
+export const RP_URL = BASE_URL + '/api/v4'

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { BASE_URL } from './config'
 
 onMounted(async () => {
-	const response = await fetch('http://127.0.0.1:8080' + '/health', {
+	const response = await fetch(BASE_URL + '/health', {
 		method: 'GET',
 		headers: {
 			'Content-Type': 'application/json',
